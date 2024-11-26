@@ -9,13 +9,18 @@
 </head>
 
 <body>
-  <canvas id="budgetChart" width="800" height="800"></canvas>
+  <div style="text-align: center;">
+    <canvas id="budgetChart" width="800" height="800"></canvas>
+    <div>
+      <button id="toggleScaleButton">Switch between logarithmic and linear axis</button>
+    </div>
+  </div>
   <script>
     const ctx = document.getElementById('budgetChart').getContext('2d');
 
     // Health Check SetUp
     const ignoreThreshold = 100;
-    const ignoreColor = 'rgba(0, 200, 0, 0.3)';
+    const ignoreColor = 'rgba(125, 125, 125, 0.6)';
     const minOkBudgetPercentage = 0.9;
     const maxOkBudgetPercentage = 1.1;
     const okColor = 'rgba(0, 255, 0, 0.3)';
@@ -27,7 +32,18 @@
     const warningColor = 'rgba(246,237,195,1.00)';
 
     // Calculate the step for each x value (log scale)
-    const calculateStep = (x) => Math.max(Math.ceil(0.01 * x), 1);
+
+    let currentScaleType = 'logarithmic'; // Default scale type
+
+    const calculateStep = (x) => {
+      if (currentScaleType === 'logarithmic') {
+        return Math.max(Math.ceil(0.001 * x), 1); // Smaller steps for logarithmic scale
+      } else if (currentScaleType === 'linear') {
+        return Math.max(Math.ceil(0.005 * x), 5); // Larger steps for linear scale
+      }
+      return 1; // Fallback value
+    };
+
 
     // Generate random data (replace with API data)
     const generateRandomData = (numPoints, minBudget, maxBudget, minUsage, maxUsage) => {
@@ -44,7 +60,7 @@
       datasets: [
         {
           label: 'Budgets Groups',
-          data: generateRandomData(100, 10, 100000, 1, 100000),
+          data: generateRandomData(500, 10, 100000, 1, 100000), //Just as showcase
           backgroundColor: 'white',
           borderColor: 'rgba(0, 123, 255, 1)',
           borderWidth: 2,
@@ -144,8 +160,6 @@
 
 
         // Drawing the Ignore Box directly in the beforeDraw method
-        const ignoreThreshold = 100;
-        const ignoreColor = 'rgba(0, 200, 0, 0.3)';
         const ignoreMinPixelX = getPixel(scales.x, 0);
         const ignoreMaxPixelX = getPixel(scales.x, ignoreThreshold);
         const ignoreMinPixelY = getPixel(scales.y, 0);
@@ -192,16 +206,20 @@
         for (let x = minBudget; x <= maxX; x += calculateStep(x)) {
           const xMinPixel = getPixel(scales.x, x);
           const xMaxPixel = getPixel(scales.x, x + calculateStep(x));
+
           const yMinValue = Math.max(maxCritBudgetPercentage * x, x + startCritBuudgetValueOverspend);
 
+          // Skip values outside the range
           if (x > maxX || yMinValue > maxY) continue;
 
           const yMinPixel = getPixel(scales.y, yMinValue);
 
+          // Ensure correct bounds
           const rectXMin = Math.max(left, xMinPixel);
           const rectXMax = Math.min(right, xMaxPixel);
           const rectYMin = Math.max(top, yMinPixel);
 
+          // Draw from the calculated yMinPixel to the top of the chart area
           ctx.fillStyle = criticalColor;
           ctx.fillRect(rectXMin, rectYMin, rectXMax - rectXMin, top - rectYMin);
         }
@@ -215,6 +233,17 @@
       type: 'scatter',
       data: data,
       options: options,
+    });
+
+    // Event handler for toggling axes scales
+    document.getElementById('toggleScaleButton').addEventListener('click', () => {
+      const newScaleType = currentScaleType === 'logarithmic' ? 'linear' : 'logarithmic';
+      currentScaleType = newScaleType;
+
+      budgetChart.options.scales.x.type = newScaleType;
+      budgetChart.options.scales.y.type = newScaleType;
+
+      budgetChart.update();
     });
   </script>
 </body>

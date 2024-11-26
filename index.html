@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PoC HealthCheck Display</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+
+<body>
+  <canvas id="budgetChart" width="800" height="800"></canvas>
+  <script>
+    const ctx = document.getElementById('budgetChart').getContext('2d');
+
+    // Health Check SetUp
+    const ignoreThreshold = 100;
+    const ignoreColor = 'rgba(0, 200, 0, 0.3)';
+    const minOkBudgetPercentage = 0.9;
+    const maxOkBudgetPercentage = 1.1;
+    const okColor = 'rgba(0, 255, 0, 0.3)';
+    const minCritBudgetValueUnderspend = 300;
+    const minCritBudgetPercentage = 0.75;
+    const startCritBuudgetValueOverspend = 500;
+    const maxCritBudgetPercentage = 1.25;
+    const criticalColor = 'rgba(255, 0, 0, 0.2)';
+    const warningColor = 'rgba(246,237,195,1.00)';
+
+    // Calculate the step for each x value (log scale)
+    const calculateStep = (x) => Math.max(Math.ceil(0.01 * x), 1);
+
+    // Generate random data (replace with API data)
+    const generateRandomData = (numPoints, minBudget, maxBudget, minUsage, maxUsage) => {
+      const data = [];
+      for (let i = 0; i < numPoints; i++) {
+        const budget = parseFloat((Math.pow(10, Math.random() * (Math.log10(maxBudget) - Math.log10(minBudget)) + Math.log10(minBudget))).toFixed(2));
+        const usage = parseFloat((Math.pow(10, Math.random() * (Math.log10(maxUsage) - Math.log10(minUsage)) + Math.log10(minUsage))).toFixed(2));
+        data.push({ x: budget, y: usage, project: `Project ${i + 1}` });
+      }
+      return data;
+    };
+
+    const data = {
+      datasets: [
+        {
+          label: 'Budgets Groups',
+          data: generateRandomData(100, 10, 100000, 1, 100000),
+          backgroundColor: 'white',
+          borderColor: 'rgba(0, 123, 255, 1)',
+          borderWidth: 2,
+        },
+      ],
+    };
+
+    // Round up function to get a suitable maximum value for the axis
+    const roundUpToDynamic = (value) => {
+      const magnitude = Math.pow(10, Math.floor(Math.log10(value)));
+      const roundTo = value > magnitude * 2 ? magnitude * 10 : magnitude * 2;
+      return Math.ceil(value / roundTo) * roundTo;
+    };
+
+    const maxBudgetRaw = Math.max(...data.datasets[0].data.map(point => point.x));
+    const maxUsageRaw = Math.max(...data.datasets[0].data.map(point => point.y));
+    const maxBudget = roundUpToDynamic(maxBudgetRaw);
+    const maxUsage = roundUpToDynamic(maxUsageRaw);
+
+    // Calculate the minimum value for the axis
+    const calculateMin = (data, axis) => {
+      const minValue = Math.min(...data.map((point) => point[axis]));
+      const powerOfTen = Math.pow(10, Math.floor(Math.log10(minValue)));
+      return Math.floor(minValue / powerOfTen) * powerOfTen || 1;
+    };
+
+    const minBudget = calculateMin(data.datasets[0].data, 'x');
+    const minUsage = calculateMin(data.datasets[0].data, 'y');
+
+    // Chart options
+    const options = {
+      responsive: true,
+      scales: {
+        x: {
+          type: 'logarithmic',
+          title: {
+            display: true,
+            text: 'Budget ($)',
+          },
+          min: minBudget,
+          max: maxBudget,
+        },
+        y: {
+          type: 'logarithmic',
+          title: {
+            display: true,
+            text: 'Usage ($)',
+          },
+          min: minUsage,
+          max: maxUsage,
+        },
+      },
+      plugins: {
+        tooltip: {
+          callbacks: {
+            label: function (context) {
+              const project = context.raw.project;
+              const budget = context.raw.x;
+              const usage = context.raw.y;
+              const percentage = ((usage / budget) * 100).toFixed(1);
+              return `${project}: Usage: $${usage}, Budget: $${budget}, %Usage: ${percentage}%`;
+            },
+          },
+        },
+      },
+      animation: false,
+    };
+
+
+    // Background color plugin (warning area)
+    Chart.register({
+      id: 'backgroundPlugin',
+      beforeDraw(chart) {
+        const { ctx, chartArea } = chart;
+
+        if (!chartArea) return;
+        const { left, top, width, height } = chartArea;
+        ctx.save();
+        ctx.fillStyle = warningColor;
+        ctx.fillRect(left, top, width, height);
+        ctx.restore();
+      },
+    });
+
+    // Custom Zones plugin (OK, Low, High Usage areas)
+    Chart.register({
+      id: 'customZones',
+      beforeDraw(chart) {
+        const { ctx, chartArea, scales } = chart;
+        const { left, right, top, bottom } = chartArea;
+        const maxX = maxBudget;
+        const maxY = maxUsage;
+
+        ctx.save();
+
+        const getPixel = (scale, value) => scale.getPixelForValue(value);
+
+
+        // Drawing the Ignore Box directly in the beforeDraw method
+        const ignoreThreshold = 100;
+        const ignoreColor = 'rgba(0, 200, 0, 0.3)';
+        const ignoreMinPixelX = getPixel(scales.x, 0);
+        const ignoreMaxPixelX = getPixel(scales.x, ignoreThreshold);
+        const ignoreMinPixelY = getPixel(scales.y, 0);
+        const ignoreMaxPixelY = getPixel(scales.y, ignoreThreshold);
+
+        ctx.fillStyle = ignoreColor;
+        ctx.fillRect(ignoreMinPixelX, ignoreMinPixelY, ignoreMaxPixelX - ignoreMinPixelX, ignoreMaxPixelY - ignoreMinPixelY);
+
+        // OK Zone (Green)
+        for (let x = minOkBudgetPercentage * ignoreThreshold; x <= maxX; x += calculateStep(x)) {
+          const xMinPixel = getPixel(scales.x, x);
+          const xMaxPixel = getPixel(scales.x, x + calculateStep(x));
+          const yMinValue = x < ignoreThreshold ? ignoreThreshold : Math.min(minOkBudgetPercentage * x, maxY);
+          const yMaxValue = Math.min(maxOkBudgetPercentage * (x + calculateStep(x)), maxY);
+
+          const yMinPixel = getPixel(scales.y, yMaxValue);
+          const yMaxPixel = getPixel(scales.y, yMinValue);
+
+          const rectXMin = Math.max(left, xMinPixel);
+          const rectXMax = Math.min(right, xMaxPixel);
+          const rectYMin = Math.max(top, yMinPixel);
+          const rectYMax = Math.min(bottom, yMaxPixel);
+
+          ctx.fillStyle = okColor;
+          ctx.fillRect(rectXMin, rectYMin, rectXMax - rectXMin, rectYMax - rectYMin);
+        }
+
+        // Low Usage Zone (Critical)
+        for (let x = minCritBudgetValueUnderspend; x <= maxX; x += calculateStep(x)) {
+          const xMinPixel = getPixel(scales.x, x);
+          const xMaxPixel = getPixel(scales.x, x + calculateStep(x));
+          const yMaxValue = Math.min(minCritBudgetPercentage * x, maxY);
+
+          const yMaxPixel = Math.min(getPixel(scales.y, yMaxValue), bottom);
+
+          const rectXMin = Math.max(left, xMinPixel);
+          const rectXMax = Math.min(right, xMaxPixel);
+
+          ctx.fillStyle = criticalColor;
+          ctx.fillRect(rectXMin, bottom, rectXMax - rectXMin, yMaxPixel - bottom);
+        }
+
+        // High Usage Zone (Critical)
+        for (let x = minBudget; x <= maxX; x += calculateStep(x)) {
+          const xMinPixel = getPixel(scales.x, x);
+          const xMaxPixel = getPixel(scales.x, x + calculateStep(x));
+          const yMinValue = Math.max(maxCritBudgetPercentage * x, x + startCritBuudgetValueOverspend);
+
+          if (x > maxX || yMinValue > maxY) continue;
+
+          const yMinPixel = getPixel(scales.y, yMinValue);
+
+          const rectXMin = Math.max(left, xMinPixel);
+          const rectXMax = Math.min(right, xMaxPixel);
+          const rectYMin = Math.max(top, yMinPixel);
+
+          ctx.fillStyle = criticalColor;
+          ctx.fillRect(rectXMin, rectYMin, rectXMax - rectXMin, top - rectYMin);
+        }
+
+        ctx.restore();
+      },
+    });
+
+    // Chart creation
+    const budgetChart = new Chart(ctx, {
+      type: 'scatter',
+      data: data,
+      options: options,
+    });
+  </script>
+</body>
+
+</html>

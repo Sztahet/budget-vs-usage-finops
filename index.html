@@ -11,6 +11,17 @@
 <body>
   <div style="text-align: center;">
     <canvas id="budgetChart" width="800" height="800"></canvas>
+    <!-- TODO zooms on axis -->
+    <!-- <div style="text-align: center; margin-top: 10px;">
+      <label for="xSlider">Max X:</label>
+      <input type="range" id="xSlider" min="1" max="100000" step="1" value="100000">
+      <span id="xSliderValue">100000</span>
+
+      <label for="ySlider" style="margin-left: 20px;">Max Y:</label>
+      <input type="range" id="ySlider" min="1" max="100000" step="1" value="100000">
+      <span id="ySliderValue">100000</span>
+    </div> -->
+    <div id="chartLegend" style="text-align: center; margin-top: 10px;"></div>
     <div>
       <button id="toggleScaleButton">Switch between logarithmic and linear axis</button>
     </div>
@@ -30,6 +41,44 @@
     const maxCritBudgetPercentage = 1.25;
     const criticalColor = 'rgba(255, 0, 0, 0.2)';
     const warningColor = 'rgba(246,237,195,1.00)';
+
+    const generateLegend = () => {
+      const legendContainer = document.getElementById('chartLegend');
+      const legendItems = [
+        { label: 'Ignore Zone', color: ignoreColor },
+        { label: 'OK Zone', color: okColor },
+        { label: 'Critical Zone', color: criticalColor },
+        { label: 'Warning Zone', color: warningColor },
+      ];
+
+      legendItems.forEach(item => {
+        const legendItem = document.createElement('div');
+        legendItem.style.display = 'inline-block';
+        legendItem.style.margin = '5px';
+
+        const colorBox = document.createElement('div');
+        colorBox.style.display = 'inline-block';
+        colorBox.style.width = '20px';
+        colorBox.style.height = '20px';
+        colorBox.style.backgroundColor = item.color;
+        colorBox.style.border = '1px solid black';
+        colorBox.style.verticalAlign = 'middle';
+        colorBox.style.marginRight = '5px';
+
+        const label = document.createElement('span');
+        label.textContent = item.label;
+
+        legendItem.appendChild(colorBox);
+        legendItem.appendChild(label);
+
+        legendContainer.appendChild(legendItem);
+      });
+    };
+
+    // Call the function to generate the legend
+    generateLegend();
+
+
 
     // Calculate the step for each x value (log scale)
 
@@ -245,7 +294,35 @@
 
       budgetChart.update();
     });
-  </script>
+
+
+    const xSlider = document.getElementById('xSlider');
+    const ySlider = document.getElementById('ySlider');
+    const xSliderValue = document.getElementById('xSliderValue');
+    const ySliderValue = document.getElementById('ySliderValue');
+
+
+    // BELOW not used code for sliders
+  //   // Aktualizacja granic wykresu na podstawie suwaków
+  //   const updateChartLimits = () => {
+  //     const newMaxX = parseInt(xSlider.value, 10);
+  //     const newMaxY = parseInt(ySlider.value, 10);
+
+  //     xSliderValue.textContent = newMaxX;
+  //     ySliderValue.textContent = newMaxY;
+
+  //     // Aktualizacja granic wykresu
+  //     budgetChart.options.scales.x.max = newMaxX;
+  //     budgetChart.options.scales.y.max = newMaxY;
+
+  //     // Odswieżenie wykresu
+  //     budgetChart.update();
+  //   };
+
+  //   // Dodanie obsługi zdarzeń
+  //   xSlider.addEventListener('input', updateChartLimits);
+  //   ySlider.addEventListener('input', updateChartLimits);
+  // </script>
 </body>
 
 </html>

@@ -1,18 +1,16 @@
 <!DOCTYPE html>
 <html lang="en">
-
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>PoC HealthCheck Display</title>
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-</head>
-
-<body>
-  <div style="text-align: center;">
-    <canvas id="budgetChart" width="800" height="800"></canvas>
-    <!-- TODO zooms on axis -->
-    <!-- <div style="text-align: center; margin-top: 10px;">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>PoC HealthCheck Display</title>
+        <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    </head>
+    <body>
+        <div style="text-align: center;">
+            <canvas id="budgetChart" width="800" height="800"></canvas>
+            <!-- TODO zooms on axis -->
+            <!-- <div style="text-align: center; margin-top: 10px;">
       <label for="xSlider">Max X:</label>
       <input type="range" id="xSlider" min="1" max="100000" step="1" value="100000">
       <span id="xSliderValue">100000</span>
@@ -21,12 +19,12 @@
       <input type="range" id="ySlider" min="1" max="100000" step="1" value="100000">
       <span id="ySliderValue">100000</span>
     </div> -->
-    <div id="chartLegend" style="text-align: center; margin-top: 10px;"></div>
-    <div>
-      <button id="toggleScaleButton">Switch between logarithmic and linear axis</button>
-    </div>
-  </div>
-  <script>
+            <div id="chartLegend" style="text-align: center; margin-top: 10px;"></div>
+            <div>
+                <button id="toggleScaleButton">Switch between logarithmic and linear axis</button>
+            </div>
+        </div>
+        <script>
     const ctx = document.getElementById('budgetChart').getContext('2d');
 
     // Health Check SetUp
@@ -39,6 +37,8 @@
     const minCritBudgetPercentage = 0.75;
     const startCritBuudgetValueOverspend = 500;
     const maxCritBudgetPercentage = 1.25;
+    const warningAboveVauleMaxStatus = true;
+    const warningAboveVauleMax = 1000;
     const criticalColor = 'rgba(255, 0, 0, 0.2)';
     const warningColor = 'rgba(246,237,195,1.00)';
 
@@ -78,8 +78,6 @@
     // Call the function to generate the legend
     generateLegend();
 
-
-
     // Calculate the step for each x value (log scale)
 
     let currentScaleType = 'logarithmic'; // Default scale type
@@ -88,11 +86,10 @@
       if (currentScaleType === 'logarithmic') {
         return Math.max(Math.ceil(0.001 * x), 1); // Smaller steps for logarithmic scale
       } else if (currentScaleType === 'linear') {
-        return Math.max(Math.ceil(0.005 * x), 5); // Larger steps for linear scale
+        return Math.max(Math.ceil(0.003 * x), 1); // Larger steps for linear scale
       }
       return 1; // Fallback value
     };
-
 
     // Generate random data (replace with API data)
     const generateRandomData = (numPoints, minBudget, maxBudget, minUsage, maxUsage) => {
@@ -102,6 +99,7 @@
         const usage = parseFloat((Math.pow(10, Math.random() * (Math.log10(maxUsage) - Math.log10(minUsage)) + Math.log10(minUsage))).toFixed(2));
         data.push({ x: budget, y: usage, project: `Project ${i + 1}` });
       }
+      data.push({ x: 25, y: 0, project: `Project test 0 usage}` });
       return data;
     };
 
@@ -109,7 +107,7 @@
       datasets: [
         {
           label: 'Budgets Groups',
-          data: generateRandomData(500, 10, 100000, 1, 100000), //Just as showcase
+          data: generateRandomData(50, 10, 221000, 1, 221000), //Just as showcase
           backgroundColor: 'white',
           borderColor: 'rgba(0, 123, 255, 1)',
           borderWidth: 2,
@@ -139,6 +137,17 @@
     const minBudget = calculateMin(data.datasets[0].data, 'x');
     const minUsage = calculateMin(data.datasets[0].data, 'y');
 
+    const normalizeDataWithOriginal = (data, minValue) => {
+      return data.map(point => ({
+        originalX: point.x, // Save original X
+        originalY: point.y, // Save original Y
+        x: Math.max(point.x, minValue), // Adjusted X for logarithmic scale
+        y: Math.max(point.y, minValue), // Adjusted Y for logarithmic scale
+        project: point.project,
+      }));
+    };
+    // In order to display 0 usage values we show them on point 1
+    data.datasets[0].data = normalizeDataWithOriginal(data.datasets[0].data, 1);
     // Chart options
     const options = {
       responsive: true,
@@ -166,9 +175,10 @@
         tooltip: {
           callbacks: {
             label: function (context) {
-              const project = context.raw.project;
-              const budget = context.raw.x;
-              const usage = context.raw.y;
+              const point = context.raw;
+              const project = point.project;
+              const budget = point.originalX; // Use original X value
+              const usage = point.originalY; // Use original Y value
               const percentage = ((usage / budget) * 100).toFixed(1);
               return `${project}: Usage: $${usage}, Budget: $${budget}, %Usage: ${percentage}%`;
             },
@@ -209,13 +219,18 @@
 
 
         // Drawing the Ignore Box directly in the beforeDraw method
-        const ignoreMinPixelX = getPixel(scales.x, 0);
-        const ignoreMaxPixelX = getPixel(scales.x, ignoreThreshold);
-        const ignoreMinPixelY = getPixel(scales.y, 0);
-        const ignoreMaxPixelY = getPixel(scales.y, ignoreThreshold);
+        const pixelXMin = scales.x.getPixelForValue(Math.max(scales.x.min, 0));
+        const pixelXMax = scales.x.getPixelForValue(Math.min(scales.x.max, ignoreThreshold));
+        const pixelYMin = scales.y.getPixelForValue(Math.max(scales.y.min, 0));
+        const pixelYMax = scales.y.getPixelForValue(Math.min(scales.y.max, ignoreThreshold));
 
-        ctx.fillStyle = ignoreColor;
-        ctx.fillRect(ignoreMinPixelX, ignoreMinPixelY, ignoreMaxPixelX - ignoreMinPixelX, ignoreMaxPixelY - ignoreMinPixelY);
+        // Ensure valid dimensions before drawing
+        if (pixelXMin < pixelXMax && pixelYMax < pixelYMin) {
+          ctx.save();
+          ctx.fillStyle = ignoreColor;
+          ctx.fillRect(pixelXMin, pixelYMax, pixelXMax - pixelXMin, pixelYMin - pixelYMax);
+          ctx.restore();
+        }
 
         // OK Zone (Green)
         for (let x = minOkBudgetPercentage * ignoreThreshold; x <= maxX; x += calculateStep(x)) {
@@ -256,7 +271,8 @@
           const xMinPixel = getPixel(scales.x, x);
           const xMaxPixel = getPixel(scales.x, x + calculateStep(x));
 
-          const yMinValue = Math.max(maxCritBudgetPercentage * x, x + startCritBuudgetValueOverspend);
+          const yMinValue = Math.min(warningAboveVauleMaxStatus ? Math.max((x + warningAboveVauleMax), x * maxOkBudgetPercentage) : Infinity, Math.max(maxCritBudgetPercentage * x, x + startCritBuudgetValueOverspend));
+
 
           // Skip values outside the range
           if (x > maxX || yMinValue > maxY) continue;
@@ -303,26 +319,26 @@
 
 
     // BELOW not used code for sliders
-  //   // Aktualizacja granic wykresu na podstawie suwaków
-  //   const updateChartLimits = () => {
-  //     const newMaxX = parseInt(xSlider.value, 10);
-  //     const newMaxY = parseInt(ySlider.value, 10);
+    //   // Aktualizacja granic wykresu na podstawie suwaków
+    //   const updateChartLimits = () => {
+    //     const newMaxX = parseInt(xSlider.value, 10);
+    //     const newMaxY = parseInt(ySlider.value, 10);
 
-  //     xSliderValue.textContent = newMaxX;
-  //     ySliderValue.textContent = newMaxY;
+    //     xSliderValue.textContent = newMaxX;
+    //     ySliderValue.textContent = newMaxY;
 
-  //     // Aktualizacja granic wykresu
-  //     budgetChart.options.scales.x.max = newMaxX;
-  //     budgetChart.options.scales.y.max = newMaxY;
+    //     // Aktualizacja granic wykresu
+    //     budgetChart.options.scales.x.max = newMaxX;
+    //     budgetChart.options.scales.y.max = newMaxY;
 
-  //     // Odswieżenie wykresu
-  //     budgetChart.update();
-  //   };
+    //     // Odswieżenie wykresu
+    //     budgetChart.update();
+    //   };
 
-  //   // Dodanie obsługi zdarzeń
-  //   xSlider.addEventListener('input', updateChartLimits);
-  //   ySlider.addEventListener('input', updateChartLimits);
-  // </script>
-</body>
-
+    //   // Dodanie obsługi zdarzeń
+    //   xSlider.addEventListener('input', updateChartLimits);
+    //   ySlider.addEventListener('input', updateChartLimits);
+    //
+        </script>
+    </body>
 </html>

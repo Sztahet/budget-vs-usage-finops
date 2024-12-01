@@ -1,30 +1,27 @@
 <!DOCTYPE html>
 <html lang="en">
-    <head>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>PoC HealthCheck Display</title>
-        <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    </head>
-    <body>
-        <div style="text-align: center;">
-            <canvas id="budgetChart" width="800" height="800"></canvas>
-            <!-- TODO zooms on axis -->
-            <!-- <div style="text-align: center; margin-top: 10px;">
-      <label for="xSlider">Max X:</label>
-      <input type="range" id="xSlider" min="1" max="100000" step="1" value="100000">
-      <span id="xSliderValue">100000</span>
 
-      <label for="ySlider" style="margin-left: 20px;">Max Y:</label>
-      <input type="range" id="ySlider" min="1" max="100000" step="1" value="100000">
-      <span id="ySliderValue">100000</span>
-    </div> -->
-            <div id="chartLegend" style="text-align: center; margin-top: 10px;"></div>
-            <div>
-                <button id="toggleScaleButton">Switch between logarithmic and linear axis</button>
-            </div>
-        </div>
-        <script>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PoC HealthCheck Display</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+
+<body>
+  <div style="text-align: center;">
+    <canvas id="budgetChart" width="800" height="800"></canvas>
+    <div style="text-align: center; margin-top: 10px;">
+      <label for="axisSlider">Max values on axis:</label>
+      <input type="range" id="axisSlider" min="500" max="500" step="250" value="500">
+      <span id="axisSliderValue">100000</span>
+    </div>
+    <div id="chartLegend" style="text-align: center; margin-top: 10px;"></div>
+    <div>
+      <button id="toggleScaleButton">Switch between logarithmic and linear axis</button>
+    </div>
+  </div>
+  <script>
     const ctx = document.getElementById('budgetChart').getContext('2d');
 
     // Health Check SetUp
@@ -37,7 +34,7 @@
     const minCritBudgetPercentage = 0.75;
     const startCritBuudgetValueOverspend = 500;
     const maxCritBudgetPercentage = 1.25;
-    const warningAboveVauleMaxStatus = true;
+    const warningAboveVauleMaxStatus = false;
     const warningAboveVauleMax = 1000;
     const criticalColor = 'rgba(255, 0, 0, 0.2)';
     const warningColor = 'rgba(246,237,195,1.00)';
@@ -78,15 +75,13 @@
     // Call the function to generate the legend
     generateLegend();
 
-    // Calculate the step for each x value (log scale)
-
     let currentScaleType = 'logarithmic'; // Default scale type
-
+    // Calculate the step for each x value (log scale)
     const calculateStep = (x) => {
       if (currentScaleType === 'logarithmic') {
         return Math.max(Math.ceil(0.001 * x), 1); // Smaller steps for logarithmic scale
       } else if (currentScaleType === 'linear') {
-        return Math.max(Math.ceil(0.003 * x), 1); // Larger steps for linear scale
+        return Math.max(Math.ceil(0.002 * x), 1); // Larger steps for linear scale
       }
       return 1; // Fallback value
     };
@@ -99,6 +94,7 @@
         const usage = parseFloat((Math.pow(10, Math.random() * (Math.log10(maxUsage) - Math.log10(minUsage)) + Math.log10(minUsage))).toFixed(2));
         data.push({ x: budget, y: usage, project: `Project ${i + 1}` });
       }
+
       data.push({ x: 25, y: 0, project: `Project test 0 usage}` });
       return data;
     };
@@ -107,7 +103,7 @@
       datasets: [
         {
           label: 'Budgets Groups',
-          data: generateRandomData(50, 10, 221000, 1, 221000), //Just as showcase
+          data: generateRandomData(1500, 1, 3500000, 1 , 4000000), //Just as showcase
           backgroundColor: 'white',
           borderColor: 'rgba(0, 123, 255, 1)',
           borderWidth: 2,
@@ -116,26 +112,28 @@
     };
 
     // Round up function to get a suitable maximum value for the axis
-    const roundUpToDynamic = (value) => {
-      const magnitude = Math.pow(10, Math.floor(Math.log10(value)));
-      const roundTo = value > magnitude * 2 ? magnitude * 10 : magnitude * 2;
-      return Math.ceil(value / roundTo) * roundTo;
+    const roundUpToNextDynamic = (value) => {
+      const magnitude = Math.pow(10, Math.floor(Math.log10(value))); // Największa potęga 10 poniżej wartości
+      const roundTo = Math.ceil(value / magnitude) * magnitude;     // Zaokrąglij do wielokrotności tej potęgi
+      return roundTo;
     };
 
     const maxBudgetRaw = Math.max(...data.datasets[0].data.map(point => point.x));
     const maxUsageRaw = Math.max(...data.datasets[0].data.map(point => point.y));
-    const maxBudget = roundUpToDynamic(maxBudgetRaw);
-    const maxUsage = roundUpToDynamic(maxUsageRaw);
+    const maxBudget = roundUpToNextDynamic(maxBudgetRaw);
+    const maxUsage = roundUpToNextDynamic(maxUsageRaw);
+    let maxChartAxisValue = Math.max(maxBudget, maxUsage);
 
     // Calculate the minimum value for the axis
     const calculateMin = (data, axis) => {
       const minValue = Math.min(...data.map((point) => point[axis]));
-      const powerOfTen = Math.pow(10, Math.floor(Math.log10(minValue)));
+      const powerOfTen = Math.pow(10, Math.floor(Math.log10(Math.max(minValue,1))));
       return Math.floor(minValue / powerOfTen) * powerOfTen || 1;
     };
 
     const minBudget = calculateMin(data.datasets[0].data, 'x');
     const minUsage = calculateMin(data.datasets[0].data, 'y');
+    const minChartAxisValue = Math.min(minBudget, minUsage,1);
 
     const normalizeDataWithOriginal = (data, minValue) => {
       return data.map(point => ({
@@ -158,8 +156,8 @@
             display: true,
             text: 'Budget ($)',
           },
-          min: minBudget,
-          max: maxBudget,
+          min: minChartAxisValue,
+          max: maxChartAxisValue,
         },
         y: {
           type: 'logarithmic',
@@ -167,8 +165,8 @@
             display: true,
             text: 'Usage ($)',
           },
-          min: minUsage,
-          max: maxUsage,
+          min: minChartAxisValue,
+          max: maxChartAxisValue,
         },
       },
       plugins: {
@@ -210,8 +208,8 @@
       beforeDraw(chart) {
         const { ctx, chartArea, scales } = chart;
         const { left, right, top, bottom } = chartArea;
-        const maxX = maxBudget;
-        const maxY = maxUsage;
+        const maxX = maxChartAxisValue;
+        const maxY = maxChartAxisValue;
 
         ctx.save();
 
@@ -239,16 +237,17 @@
           const yMinValue = x < ignoreThreshold ? ignoreThreshold : Math.min(minOkBudgetPercentage * x, maxY);
           const yMaxValue = Math.min(maxOkBudgetPercentage * (x + calculateStep(x)), maxY);
 
-          const yMinPixel = getPixel(scales.y, yMaxValue);
-          const yMaxPixel = getPixel(scales.y, yMinValue);
+          // Skip values outside the range
+          if (x > maxX || x < minBudget || yMinValue > maxY || yMaxValue < 0) continue;
+
+          const yMinPixel = Math.max(top, getPixel(scales.y, yMaxValue));
+          const yMaxPixel = Math.min(bottom, getPixel(scales.y, yMinValue));
 
           const rectXMin = Math.max(left, xMinPixel);
           const rectXMax = Math.min(right, xMaxPixel);
-          const rectYMin = Math.max(top, yMinPixel);
-          const rectYMax = Math.min(bottom, yMaxPixel);
 
           ctx.fillStyle = okColor;
-          ctx.fillRect(rectXMin, rectYMin, rectXMax - rectXMin, rectYMax - rectYMin);
+          ctx.fillRect(rectXMin, yMinPixel, rectXMax - rectXMin, yMaxPixel - yMinPixel);
         }
 
         // Low Usage Zone (Critical)
@@ -256,6 +255,7 @@
           const xMinPixel = getPixel(scales.x, x);
           const xMaxPixel = getPixel(scales.x, x + calculateStep(x));
           const yMaxValue = Math.min(minCritBudgetPercentage * x, maxY);
+
 
           const yMaxPixel = Math.min(getPixel(scales.y, yMaxValue), bottom);
 
@@ -267,7 +267,7 @@
         }
 
         // High Usage Zone (Critical)
-        for (let x = minBudget; x <= maxX; x += calculateStep(x)) {
+        for (let x = minChartAxisValue; x <= maxX; x += calculateStep(x)) {
           const xMinPixel = getPixel(scales.x, x);
           const xMaxPixel = getPixel(scales.x, x + calculateStep(x));
 
@@ -311,34 +311,27 @@
       budgetChart.update();
     });
 
+    const axisSlider = document.getElementById('axisSlider');
+    const axisSliderValue = document.getElementById('axisSliderValue');
+    axisSlider.max = maxChartAxisValue;
+    axisSlider.value = maxChartAxisValue
+    axisSliderValue.textContent = maxChartAxisValue;
 
-    const xSlider = document.getElementById('xSlider');
-    const ySlider = document.getElementById('ySlider');
-    const xSliderValue = document.getElementById('xSliderValue');
-    const ySliderValue = document.getElementById('ySliderValue');
+    // code for zoom in
+    const updateChartLimits = () => {
+      const newMaxAxis = parseInt(axisSlider.value, 10);
 
+      axisSliderValue.textContent = newMaxAxis
 
-    // BELOW not used code for sliders
-    //   // Aktualizacja granic wykresu na podstawie suwaków
-    //   const updateChartLimits = () => {
-    //     const newMaxX = parseInt(xSlider.value, 10);
-    //     const newMaxY = parseInt(ySlider.value, 10);
+      budgetChart.options.scales.x.max = budgetChart.options.scales.y.max = newMaxAxis;
+      budgetChart.options.scales.y.max = newMaxAxis;
+      maxChartAxisValue = newMaxAxis
+      budgetChart.update();
+    };
 
-    //     xSliderValue.textContent = newMaxX;
-    //     ySliderValue.textContent = newMaxY;
+    // zoom slider listner
+    axisSlider.addEventListener('input', updateChartLimits);
+  </script>
+</body>
 
-    //     // Aktualizacja granic wykresu
-    //     budgetChart.options.scales.x.max = newMaxX;
-    //     budgetChart.options.scales.y.max = newMaxY;
-
-    //     // Odswieżenie wykresu
-    //     budgetChart.update();
-    //   };
-
-    //   // Dodanie obsługi zdarzeń
-    //   xSlider.addEventListener('input', updateChartLimits);
-    //   ySlider.addEventListener('input', updateChartLimits);
-    //
-        </script>
-    </body>
 </html>

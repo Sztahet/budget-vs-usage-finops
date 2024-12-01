@@ -277,12 +277,12 @@
         for (let x = highStartZone; x <= xMax; x += calculateStep(x)) {
           const xMinPixel = getPixel(scales.x, x);
           const xMaxPixel = getPixel(scales.x, x + calculateStep(x));
-          const yMinValue = Math.min(
+          const yMinValue = Math.max(Math.min(
             warningAboveVauleMaxStatus
               ? Math.max(x + warningAboveVauleMax, x * maxOkBudgetPercentage)
               : Infinity,
             Math.max(maxCritBudgetPercentage * x, x + startCritBuudgetValueOverspend)
-          );
+          ),scales.y.min);
 
           // Omiń obszary poza zakresem
           if (yMinValue > yMax) continue;
@@ -342,11 +342,6 @@
 
     // zoom slider listner
     axisSlider.addEventListener('input', updateChartLimits);
-
-
-
-
-
 
 
     //------------------------------------- added section -----------------//

@@ -12,9 +12,10 @@
   <div style="text-align: center;">
     <canvas id="budgetChart" width="800" height="800"></canvas>
     <div style="text-align: center; margin-top: 10px;">
-      <label for="axisSlider">Max values on axis:</label>
+      <label id= "axisSliderLabel" for="axisSlider">Max values on axis:</label>
       <input type="range" id="axisSlider" min="500" max="500" step="250" value="500">
       <span id="axisSliderValue">100000</span>
+      <button id="resetZoomButton">Reset Zoom</button>
     </div>
     <div id="chartLegend" style="text-align: center; margin-top: 10px;"></div>
     <div>
@@ -103,7 +104,7 @@
       datasets: [
         {
           label: 'Budgets Groups',
-          data: generateRandomData(1500, 1, 3500000, 1 , 4000000), //Just as showcase
+          data: generateRandomData(1500, 1, 3500000, 1, 4000000), //Just as showcase
           backgroundColor: 'white',
           borderColor: 'rgba(0, 123, 255, 1)',
           borderWidth: 2,
@@ -123,17 +124,19 @@
     const maxBudget = roundUpToNextDynamic(maxBudgetRaw);
     const maxUsage = roundUpToNextDynamic(maxUsageRaw);
     let maxChartAxisValue = Math.max(maxBudget, maxUsage);
+    const sourceMaxChartAxisValue = maxChartAxisValue;
+    
 
     // Calculate the minimum value for the axis
     const calculateMin = (data, axis) => {
       const minValue = Math.min(...data.map((point) => point[axis]));
-      const powerOfTen = Math.pow(10, Math.floor(Math.log10(Math.max(minValue,1))));
+      const powerOfTen = Math.pow(10, Math.floor(Math.log10(Math.max(minValue, 1))));
       return Math.floor(minValue / powerOfTen) * powerOfTen || 1;
     };
 
     const minBudget = calculateMin(data.datasets[0].data, 'x');
     const minUsage = calculateMin(data.datasets[0].data, 'y');
-    const minChartAxisValue = Math.min(minBudget, minUsage,1);
+    const minChartAxisValue = Math.min(minBudget, minUsage, 1);
 
     const normalizeDataWithOriginal = (data, minValue) => {
       return data.map(point => ({
@@ -208,85 +211,86 @@
       beforeDraw(chart) {
         const { ctx, chartArea, scales } = chart;
         const { left, right, top, bottom } = chartArea;
-        const maxX = maxChartAxisValue;
-        const maxY = maxChartAxisValue;
+
+        if (!chartArea) return; // Upewnij się, że obszar wykresu jest dostępny
+
+        const xMin = scales.x.min;
+        const xMax = scales.x.max;
+        const yMin = scales.y.min;
+        const yMax = scales.y.max;
 
         ctx.save();
 
         const getPixel = (scale, value) => scale.getPixelForValue(value);
 
+        // Ignore Zone (Szary obszar w lewym dolnym rogu)
+        const pixelXMin = getPixel(scales.x, Math.max(xMin, 0));
+        const pixelXMax = getPixel(scales.x, Math.min(xMax, ignoreThreshold));
+        const pixelYMin = getPixel(scales.y, Math.max(yMin, 0));
+        const pixelYMax = getPixel(scales.y, Math.min(yMax, ignoreThreshold));
 
-        // Drawing the Ignore Box directly in the beforeDraw method
-        const pixelXMin = scales.x.getPixelForValue(Math.max(scales.x.min, 0));
-        const pixelXMax = scales.x.getPixelForValue(Math.min(scales.x.max, ignoreThreshold));
-        const pixelYMin = scales.y.getPixelForValue(Math.max(scales.y.min, 0));
-        const pixelYMax = scales.y.getPixelForValue(Math.min(scales.y.max, ignoreThreshold));
-
-        // Ensure valid dimensions before drawing
         if (pixelXMin < pixelXMax && pixelYMax < pixelYMin) {
-          ctx.save();
           ctx.fillStyle = ignoreColor;
           ctx.fillRect(pixelXMin, pixelYMax, pixelXMax - pixelXMin, pixelYMin - pixelYMax);
-          ctx.restore();
         }
 
-        // OK Zone (Green)
-        for (let x = minOkBudgetPercentage * ignoreThreshold; x <= maxX; x += calculateStep(x)) {
+        // OK Zone (Zielony obszar)
+        const okStartZone = Math.max(minOkBudgetPercentage * ignoreThreshold, scales.x.min);
+
+        for (let x = okStartZone; x <= xMax; x += calculateStep(x)) {
           const xMinPixel = getPixel(scales.x, x);
           const xMaxPixel = getPixel(scales.x, x + calculateStep(x));
-          const yMinValue = x < ignoreThreshold ? ignoreThreshold : Math.min(minOkBudgetPercentage * x, maxY);
-          const yMaxValue = Math.min(maxOkBudgetPercentage * (x + calculateStep(x)), maxY);
 
-          // Skip values outside the range
-          if (x > maxX || x < minBudget || yMinValue > maxY || yMaxValue < 0) continue;
+          const yMinValue = x < ignoreThreshold ? ignoreThreshold : Math.min(minOkBudgetPercentage * x, yMax);
+          const yMaxValue = Math.min(maxOkBudgetPercentage * (x + calculateStep(x)), yMax);
+
+          // Omiń obszary poza widocznym zakresem
+          if (yMinValue > yMax || yMaxValue < yMin) continue;
 
           const yMinPixel = Math.max(top, getPixel(scales.y, yMaxValue));
           const yMaxPixel = Math.min(bottom, getPixel(scales.y, yMinValue));
 
-          const rectXMin = Math.max(left, xMinPixel);
-          const rectXMax = Math.min(right, xMaxPixel);
-
           ctx.fillStyle = okColor;
-          ctx.fillRect(rectXMin, yMinPixel, rectXMax - rectXMin, yMaxPixel - yMinPixel);
+          ctx.fillRect(xMinPixel, yMinPixel, xMaxPixel - xMinPixel, yMaxPixel - yMinPixel);
         }
 
-        // Low Usage Zone (Critical)
-        for (let x = minCritBudgetValueUnderspend; x <= maxX; x += calculateStep(x)) {
+        // Low Usage Zone (Czerwony dolny obszar)
+        const lowStartZone = Math.max(minCritBudgetValueUnderspend, scales.x.min);
+
+        for (let x = lowStartZone; x <= xMax; x += calculateStep(x)) {
           const xMinPixel = getPixel(scales.x, x);
           const xMaxPixel = getPixel(scales.x, x + calculateStep(x));
-          const yMaxValue = Math.min(minCritBudgetPercentage * x, maxY);
+          const yMaxValue = Math.min(minCritBudgetPercentage * x, yMax);
 
+          // Omiń obszary poza zakresem
+          if (yMaxValue < yMin) continue;
 
           const yMaxPixel = Math.min(getPixel(scales.y, yMaxValue), bottom);
 
-          const rectXMin = Math.max(left, xMinPixel);
-          const rectXMax = Math.min(right, xMaxPixel);
-
           ctx.fillStyle = criticalColor;
-          ctx.fillRect(rectXMin, bottom, rectXMax - rectXMin, yMaxPixel - bottom);
+          ctx.fillRect(xMinPixel, yMaxPixel, xMaxPixel - xMinPixel, bottom - yMaxPixel);
         }
 
-        // High Usage Zone (Critical)
-        for (let x = minChartAxisValue; x <= maxX; x += calculateStep(x)) {
+        // High Usage Zone (Czerwony górny obszar)
+        const highStartZone = Math.max(xMin, scales.x.min);
+
+        for (let x = highStartZone; x <= xMax; x += calculateStep(x)) {
           const xMinPixel = getPixel(scales.x, x);
           const xMaxPixel = getPixel(scales.x, x + calculateStep(x));
+          const yMinValue = Math.min(
+            warningAboveVauleMaxStatus
+              ? Math.max(x + warningAboveVauleMax, x * maxOkBudgetPercentage)
+              : Infinity,
+            Math.max(maxCritBudgetPercentage * x, x + startCritBuudgetValueOverspend)
+          );
 
-          const yMinValue = Math.min(warningAboveVauleMaxStatus ? Math.max((x + warningAboveVauleMax), x * maxOkBudgetPercentage) : Infinity, Math.max(maxCritBudgetPercentage * x, x + startCritBuudgetValueOverspend));
-
-
-          // Skip values outside the range
-          if (x > maxX || yMinValue > maxY) continue;
+          // Omiń obszary poza zakresem
+          if (yMinValue > yMax) continue;
 
           const yMinPixel = getPixel(scales.y, yMinValue);
 
-          // Ensure correct bounds
-          const rectXMin = Math.max(left, xMinPixel);
-          const rectXMax = Math.min(right, xMaxPixel);
-          const rectYMin = Math.max(top, yMinPixel);
-
-          // Draw from the calculated yMinPixel to the top of the chart area
           ctx.fillStyle = criticalColor;
-          ctx.fillRect(rectXMin, rectYMin, rectXMax - rectXMin, top - rectYMin);
+          ctx.fillRect(xMinPixel, top, xMaxPixel - xMinPixel, yMinPixel - top);
         }
 
         ctx.restore();
@@ -313,9 +317,16 @@
 
     const axisSlider = document.getElementById('axisSlider');
     const axisSliderValue = document.getElementById('axisSliderValue');
-    axisSlider.max = maxChartAxisValue;
-    axisSlider.value = maxChartAxisValue
-    axisSliderValue.textContent = maxChartAxisValue;
+    const axisSliderLabel = document.getElementById('axisSliderLabel');
+    const setDefaultSlider = () => {
+      axisSlider.max = sourceMaxChartAxisValue;
+      axisSlider.value = sourceMaxChartAxisValue;
+      axisSliderValue.textContent = sourceMaxChartAxisValue;
+      axisSlider.style.display = 'inline-block';
+      axisSliderValue.style.display = 'inline-block';
+      axisSliderLabel.style.display = 'inline-block';
+    };
+    setDefaultSlider();
 
     // code for zoom in
     const updateChartLimits = () => {
@@ -331,6 +342,114 @@
 
     // zoom slider listner
     axisSlider.addEventListener('input', updateChartLimits);
+
+
+
+
+
+
+
+    //------------------------------------- added section -----------------//
+    // add canvas zoom in dragging rect:
+
+    let isDragging = false;
+    let dragStart = null;
+    let dragEnd = null;
+
+    const charCanvas = document.getElementById('budgetChart');
+
+    function drawSelectionBox() {
+      const { ctx, chartArea } = budgetChart;
+      const { left, right, top, bottom } = chartArea;
+
+      if (!dragStart || !dragEnd) return;
+
+      // Ograniczenie współrzędnych zaznaczenia
+      const x1 = Math.max(left, Math.min(dragStart.x, dragEnd.x));
+      const x2 = Math.min(right, Math.max(dragStart.x, dragEnd.x));
+      const y1 = Math.max(top, Math.min(dragStart.y, dragEnd.y));
+      const y2 = Math.min(bottom, Math.max(dragStart.y, dragEnd.y));
+
+      // Clear canvas and draw the selection box
+      budgetChart.update('none'); // Update without re-rendering data
+      ctx.save();
+      ctx.strokeStyle = 'rgba(0, 123, 255, 0.8)';
+      ctx.lineWidth = 2;
+      ctx.fillStyle = 'rgba(0, 123, 255, 0.3)';
+      ctx.fillRect(x1, y1, x2 - x1, y2 - y1);
+      ctx.strokeRect(x1, y1, x2 - x1, y2 - y1);
+      ctx.restore();
+    }
+
+    function updateChartZoom() {
+      const { scales } = budgetChart;
+
+      if (!dragStart || !dragEnd) return;
+
+      const chartArea = budgetChart.chartArea;
+
+      // Ograniczenie współrzędnych do granic wykresu
+      const xMin = Math.max(chartArea.left, Math.min(dragStart.x, dragEnd.x));
+      const xMax = Math.min(chartArea.right, Math.max(dragStart.x, dragEnd.x));
+      const yMin = Math.max(chartArea.top, Math.min(dragStart.y, dragEnd.y));
+      const yMax = Math.min(chartArea.bottom, Math.max(dragStart.y, dragEnd.y));
+
+      const newXMin = scales.x.getValueForPixel(xMin);
+      const newXMax = scales.x.getValueForPixel(xMax);
+      const newYMin = scales.y.getValueForPixel(yMax);
+      const newYMax = scales.y.getValueForPixel(yMin);
+
+      // Ustawienie nowych wartości osi
+      budgetChart.options.scales.x.min = newXMin;
+      budgetChart.options.scales.x.max = newXMax;
+      budgetChart.options.scales.y.min = newYMin;
+      budgetChart.options.scales.y.max = newYMax;
+
+      // Refresh the chart to redraw the zones
+      budgetChart.update();
+    }
+
+    charCanvas.addEventListener('mousedown', (event) => {
+      const chartArea = budgetChart.chartArea;
+      if (event.offsetX >= chartArea.left && event.offsetX <= chartArea.right &&
+        event.offsetY >= chartArea.top && event.offsetY <= chartArea.bottom) {
+        isDragging = true;
+        dragStart = { x: event.offsetX, y: event.offsetY };
+        dragEnd = null; // Reset end of selection
+      }
+    });
+
+    charCanvas.addEventListener('mousemove', (event) => {
+      if (isDragging) {
+        dragEnd = { x: event.offsetX, y: event.offsetY };
+        drawSelectionBox();
+      }
+    });
+
+    charCanvas.addEventListener('mouseup', () => {
+      if (isDragging && dragEnd) {
+        updateChartZoom();
+      }
+      axisSlider.style.display = 'none';
+      axisSliderValue.style.display = 'none';
+      axisSliderLabel.style.display = 'none';
+      isDragging = false;
+      dragStart = null;
+      dragEnd = null;
+    });
+
+    // Reset button to reset zoom
+    const resetButton = document.getElementById('resetZoomButton');
+    resetButton.addEventListener('click', () => {
+      budgetChart.options.scales.x.min = minChartAxisValue;
+      budgetChart.options.scales.x.max = maxChartAxisValue;
+      budgetChart.options.scales.y.min = minChartAxisValue;
+      budgetChart.options.scales.y.max = maxChartAxisValue;
+      budgetChart.update();
+      setDefaultSlider();
+      updateChartLimits();
+    });
+    // document.body.appendChild(resetButton);
   </script>
 </body>
 

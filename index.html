@@ -12,7 +12,7 @@
   <div style="text-align: center;">
     <canvas id="budgetChart" width="800" height="800"></canvas>
     <div style="text-align: center; margin-top: 10px;">
-      <label id= "axisSliderLabel" for="axisSlider">Max values on axis:</label>
+      <label id="axisSliderLabel" for="axisSlider">Max values on axis:</label>
       <input type="range" id="axisSlider" min="500" max="500" step="250" value="500">
       <span id="axisSliderValue">100000</span>
       <button id="resetZoomButton">Reset Zoom</button>
@@ -28,8 +28,8 @@
     // Health Check SetUp
     const ignoreThreshold = 100;
     const ignoreColor = 'rgba(125, 125, 125, 0.6)';
-    const minOkBudgetPercentage = 0.9;
-    const maxOkBudgetPercentage = 1.1;
+    const minOkBudgetPercentage = 0.8;
+    const maxOkBudgetPercentage = 1.05;
     const okColor = 'rgba(0, 255, 0, 0.3)';
     const minCritBudgetValueUnderspend = 300;
     const minCritBudgetPercentage = 0.75;
@@ -104,7 +104,7 @@
       datasets: [
         {
           label: 'Budgets Groups',
-          data: generateRandomData(1500, 1, 3500000, 1, 4000000), //Just as showcase
+          data: generateRandomData(15, 1, 550, 1, 550), //Just as showcase
           backgroundColor: 'white',
           borderColor: 'rgba(0, 123, 255, 1)',
           borderWidth: 2,
@@ -125,7 +125,7 @@
     const maxUsage = roundUpToNextDynamic(maxUsageRaw);
     let maxChartAxisValue = Math.max(maxBudget, maxUsage);
     const sourceMaxChartAxisValue = maxChartAxisValue;
-    
+
 
     // Calculate the minimum value for the axis
     const calculateMin = (data, axis) => {
@@ -136,7 +136,7 @@
 
     const minBudget = calculateMin(data.datasets[0].data, 'x');
     const minUsage = calculateMin(data.datasets[0].data, 'y');
-    const minChartAxisValue = Math.min(minBudget, minUsage, 1);
+    const minChartAxisValue = Math.max(Math.min(minBudget, minUsage), 1);
 
     const normalizeDataWithOriginal = (data, minValue) => {
       return data.map(point => ({
@@ -242,7 +242,7 @@
           const xMaxPixel = getPixel(scales.x, x + calculateStep(x));
 
           const yMinValue = x < ignoreThreshold ? ignoreThreshold : Math.min(minOkBudgetPercentage * x, yMax);
-          const yMaxValue = Math.min(maxOkBudgetPercentage * (x + calculateStep(x)), yMax);
+          const yMaxValue = Math.max(Math.min(maxOkBudgetPercentage * (x + calculateStep(x)), yMax), ignoreThreshold);
 
           // Omiń obszary poza widocznym zakresem
           if (yMinValue > yMax || yMaxValue < yMin) continue;
@@ -282,7 +282,7 @@
               ? Math.max(x + warningAboveVauleMax, x * maxOkBudgetPercentage)
               : Infinity,
             Math.max(maxCritBudgetPercentage * x, x + startCritBuudgetValueOverspend)
-          ),scales.y.min);
+          ), scales.y.min);
 
           // Omiń obszary poza zakresem
           if (yMinValue > yMax) continue;

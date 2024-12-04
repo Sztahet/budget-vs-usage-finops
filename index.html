@@ -93,25 +93,38 @@
       for (let i = 0; i < numPoints; i++) {
         const budget = parseFloat((Math.pow(10, Math.random() * (Math.log10(maxBudget) - Math.log10(minBudget)) + Math.log10(minBudget))).toFixed(2));
         const usage = parseFloat((Math.pow(10, Math.random() * (Math.log10(maxUsage) - Math.log10(minUsage)) + Math.log10(minUsage))).toFixed(2));
-        data.push({ x: budget, y: usage, project: `Project ${i + 1}` });
+        const feedback = i % 2 ? 'ok' : 'ignore';
+        data.push({ x: budget, y: usage, project: `Project ${i + 1}`, feedback : feedback });
       }
 
-      data.push({ x: 25, y: 0, project: `Project test 0 usage}` });
+      data.push({ x: 25, y: 0, project: `Project test 0 usage}`, feedback : 'err_high' } );
       return data;
     };
+    const dataReady = generateRandomData(15, 1, 550, 1, 550); //Just as showcase
 
     const data = {
       datasets: [
         {
           label: 'Budgets Groups',
-          data: generateRandomData(15, 1, 550, 1, 550), //Just as showcase
+          data: dataReady,
+          pointBackgroundColor: (context) => {
+            const index = context.dataIndex;
+            const pointColor = dataReady[index].feedback;
+            return getColorForBudgetGroup(pointColor);
+          },
+          pointRadius: 4,
+          pointBorderColor: 'black',
           backgroundColor: 'white',
-          borderColor: 'rgba(0, 123, 255, 1)',
+          // borderColor: 'rgba(0, 123, 255, 1)',
           borderWidth: 2,
         },
       ],
     };
-
+    const getColorForBudgetGroup = (feedback) => {
+      if (feedback == 'ok') return 'green';
+      if (feedback == 'ignore') return 'grey';
+      return 'black';
+    };
     // Round up function to get a suitable maximum value for the axis
     const roundUpToNextDynamic = (value) => {
       const magnitude = Math.pow(10, Math.floor(Math.log10(value))); // Największa potęga 10 poniżej wartości
@@ -145,6 +158,7 @@
         x: Math.max(point.x, minValue), // Adjusted X for logarithmic scale
         y: Math.max(point.y, minValue), // Adjusted Y for logarithmic scale
         project: point.project,
+        feedback: point.feedback,
       }));
     };
     // In order to display 0 usage values we show them on point 1
@@ -181,7 +195,8 @@
               const budget = point.originalX; // Use original X value
               const usage = point.originalY; // Use original Y value
               const percentage = ((usage / budget) * 100).toFixed(1);
-              return `${project}: Usage: $${usage}, Budget: $${budget}, %Usage: ${percentage}%`;
+              const feedback = point.feedback;
+              return `${project}: Usage: $${usage}, Budget: $${budget}, %Usage: ${percentage}%, health check: ${feedback}`;
             },
           },
         },

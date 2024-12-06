@@ -1,33 +1,28 @@
 <!DOCTYPE html>
 <html lang="en">
-    <head>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>PoC HealthCheck Display</title>
-        <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    </head>
-    <body>
-        <div style="text-align: center;">
-            <canvas id="budgetChart" width="800" height="800"></canvas>
-            <div style="text-align: center; margin-top: 10px;">
-                <label id="axisSliderLabel" for="axisSlider">Max values on axis:</label>
-                <input
-                    type="range"
-                    id="axisSlider"
-                    min="500"
-                    max="500"
-                    step="250"
-                    value="500"
-                >
-                <span id="axisSliderValue">100000</span>
-                <button id="resetZoomButton">Reset Zoom</button>
-            </div>
-            <div id="chartLegend" style="text-align: center; margin-top: 10px;"></div>
-            <div>
-                <button id="toggleScaleButton">Switch between logarithmic and linear axis</button>
-            </div>
-        </div>
-        <script>
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PoC HealthCheck Display</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+
+<body>
+  <div style="text-align: center;">
+    <canvas id="budgetChart" width="800" height="800"></canvas>
+    <div style="text-align: center; margin-top: 10px;">
+      <label id="axisSliderLabel" for="axisSlider">Max values on axis:</label>
+      <input type="range" id="axisSlider" min="500" max="500" step="250" value="500">
+      <span id="axisSliderValue">100000</span>
+      <button id="resetZoomButton">Reset Zoom</button>
+    </div>
+    <div id="chartLegend" style="text-align: center; margin-top: 10px;"></div>
+    <div>
+      <button id="toggleScaleButton">Switch between logarithmic and linear axis</button>
+    </div>
+  </div>
+  <script>
     const ctx = document.getElementById('budgetChart').getContext('2d');
 
     // Health Check SetUp
@@ -73,7 +68,6 @@
 
         legendItem.appendChild(colorBox);
         legendItem.appendChild(label);
-
         legendContainer.appendChild(legendItem);
       });
     };
@@ -143,7 +137,6 @@
     const maxUsage = roundUpToNextDynamic(maxUsageRaw * 1.05);// min 5% extra margin on usage
     let maxChartAxisValue = Math.max(maxBudget, maxUsage, ignoreThreshold * 2); //minmum ignore Threshold x2
     const sourceMaxChartAxisValue = maxChartAxisValue;
-
 
     // Calculate the minimum value for the axis
     const calculateMin = (data, axis) => {
@@ -260,7 +253,7 @@
           {
             x: getPixel(scales.x, ignoreThreshold / maxOkBudgetPercentage),
             y: getPixel(scales.y, ignoreThreshold),
-          }, // Punkt 1
+          },
           {
             x: getPixel(scales.x, ignoreThreshold),
             y: getPixel(scales.y, ignoreThreshold),
@@ -422,8 +415,6 @@
     // zoom slider listner
     axisSlider.addEventListener('input', updateChartLimits);
 
-
-    //------------------------------------- added section -----------------//
     // add canvas zoom in dragging rect:
 
     let isDragging = false;
@@ -521,8 +512,6 @@
         dragStart = null;
         dragEnd = null;
       }
-
-
     }
 
     charCanvas.addEventListener('mouseup', () => {
@@ -549,6 +538,7 @@
       updateChartLimits();
     });
     // document.body.appendChild(resetButton);
-        </script>
-    </body>
+  </script>
+</body>
+
 </html>

@@ -1,28 +1,33 @@
 <!DOCTYPE html>
 <html lang="en">
-
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>PoC HealthCheck Display</title>
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-</head>
-
-<body>
-  <div style="text-align: center;">
-    <canvas id="budgetChart" width="800" height="800"></canvas>
-    <div style="text-align: center; margin-top: 10px;">
-      <label id="axisSliderLabel" for="axisSlider">Max values on axis:</label>
-      <input type="range" id="axisSlider" min="500" max="500" step="250" value="500">
-      <span id="axisSliderValue">100000</span>
-      <button id="resetZoomButton">Reset Zoom</button>
-    </div>
-    <div id="chartLegend" style="text-align: center; margin-top: 10px;"></div>
-    <div>
-      <button id="toggleScaleButton">Switch between logarithmic and linear axis</button>
-    </div>
-  </div>
-  <script>
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>PoC HealthCheck Display</title>
+        <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    </head>
+    <body>
+        <div style="text-align: center;">
+            <canvas id="budgetChart" width="800" height="800"></canvas>
+            <div style="text-align: center; margin-top: 10px;">
+                <label id="axisSliderLabel" for="axisSlider">Max values on axis:</label>
+                <input
+                    type="range"
+                    id="axisSlider"
+                    min="500"
+                    max="500"
+                    step="250"
+                    value="500"
+                >
+                <span id="axisSliderValue">100000</span>
+                <button id="resetZoomButton">Reset Zoom</button>
+            </div>
+            <div id="chartLegend" style="text-align: center; margin-top: 10px;"></div>
+            <div>
+                <button id="toggleScaleButton">Switch between logarithmic and linear axis</button>
+            </div>
+        </div>
+        <script>
     const ctx = document.getElementById('budgetChart').getContext('2d');
 
     // Health Check SetUp
@@ -37,7 +42,7 @@
     const maxCritBudgetPercentage = 1.20;
     const warningAboveVauleMaxStatus = false;
     const warningAboveVauleMax = 1000;
-    const criticalColor = 'rgba(255, 0, 0, 1)';
+    const criticalColor = 'rgba(255, 0, 0, 0.1)';
     const warningColor = 'rgba(246,230,170,1)';
 
     const generateLegend = () => {
@@ -250,31 +255,56 @@
           ctx.fillRect(pixelXMin, pixelYMax, pixelXMax - pixelXMin, pixelYMin - pixelYMax);
         }
 
-        // OK Zone (Zielony obszar)
-        const okStartZone = Math.max(minOkBudgetPercentage * ignoreThreshold, scales.x.min);
+        // Ok Zone Fixed to avoid wrong rendering
+        const pointsOK = [
+          {
+            x: getPixel(scales.x, ignoreThreshold / maxOkBudgetPercentage),
+            y: getPixel(scales.y, ignoreThreshold),
+          }, // Punkt 1
+          {
+            x: getPixel(scales.x, ignoreThreshold),
+            y: getPixel(scales.y, ignoreThreshold),
+          },
+          {
+            x: getPixel(scales.x, ignoreThreshold),
+            y: getPixel(scales.y, ignoreThreshold * minOkBudgetPercentage),
+          },
+          {
+            x: getPixel(scales.x, xMax),
+            y: getPixel(scales.y, xMax * minOkBudgetPercentage)
+          },
+          {
+            x: getPixel(scales.x, xMax),
+            y: getPixel(scales.y, xMax * maxOkBudgetPercentage)
+          },
+          {
+            x: getPixel(scales.x, xMax / maxOkBudgetPercentage),
+            y: getPixel(scales.y, xMax)
+          },
+        ];
+        ctx.save();
 
-        for (let x = okStartZone; x <= xMax; x += calculateStep(x)) {
-          const xMinPixel = getPixel(scales.x, x);
-          const xMaxPixel = getPixel(scales.x, x + calculateStep(x));
+        // Ustaw maskę odpowiadającą granicom wykresu
+        ctx.beginPath();
+        ctx.rect(left, top, right - left, bottom - top);
+        ctx.clip(); // O
 
-          const yMinValue = x < ignoreThreshold ? ignoreThreshold : Math.min(minOkBudgetPercentage * x, yMax);
-          const yMaxValue = Math.max(Math.min(maxOkBudgetPercentage * (x + calculateStep(x)), yMax), ignoreThreshold);
+        // Rysowanie poligonu
+        ctx.beginPath();
+        ctx.fillStyle = okColor;
+        ctx.moveTo(pointsOK[0].x, pointsOK[0].y);
 
-          // Omiń obszary poza widocznym zakresem
-          if (yMinValue > yMax || yMaxValue < yMin) continue;
-
-          const yMinPixel = Math.max(top, getPixel(scales.y, yMaxValue));
-          const yMaxPixel = Math.min(bottom, getPixel(scales.y, yMinValue));
-
-          ctx.fillStyle = okColor;
-          ctx.fillRect(xMinPixel, yMinPixel, xMaxPixel - xMinPixel, yMaxPixel - yMinPixel);
-        }
+        pointsOK.forEach(point => {
+          ctx.lineTo(point.x, point.y);
+        });
+        ctx.closePath();
+        ctx.fill();
 
         // Low Usage Zone (Czerwony dolny obszar)
         const lowStartZone = Math.max(minCritBudgetValueUnderspend, scales.x.min);
         const lowPoints = [];
 
-        for (let x = lowStartZone; x <= xMax; x += calculateStep(x)) {
+        for (let x = lowStartZone; x <= xMax + calculateStep(x); x += calculateStep(x)) {
           const xPixel = getPixel(scales.x, x);
           const yMaxValue = Math.min(minCritBudgetPercentage * x, yMax);
 
@@ -305,7 +335,7 @@
         const highStartZone = Math.max(xMin, scales.x.min);
         const points = [];
 
-        for (let x = highStartZone; x <= xMax; x += calculateStep(x)) {
+        for (let x = highStartZone; x <= xMax + calculateStep(x); x += calculateStep(x)) {
           const xMinPixel = getPixel(scales.x, x);
           const xMaxPixel = getPixel(scales.x, x + calculateStep(x));
           const yMinValue = Math.max(
@@ -328,7 +358,7 @@
         }
 
         // Zamknij wielokąt, dodając rogi osi
-        points.push({ x: getPixel(scales.x, xMax), y: top });
+        points.push({ x: getPixel(scales.x, Math.min(xMax, yMax / maxCritBudgetPercentage)), y: top });
         points.push({ x: getPixel(scales.x, highStartZone), y: top });
 
         // Rysowanie wielokąta
@@ -364,7 +394,6 @@
 
       budgetChart.update();
     });
-
     const axisSlider = document.getElementById('axisSlider');
     const axisSliderValue = document.getElementById('axisSliderValue');
     const axisSliderLabel = document.getElementById('axisSliderLabel');
@@ -382,11 +411,11 @@
     const updateChartLimits = () => {
       const newMaxAxis = parseInt(axisSlider.value, 10);
 
-      axisSliderValue.textContent = newMaxAxis
+      axisSliderValue.textContent = newMaxAxis;
 
       budgetChart.options.scales.x.max = budgetChart.options.scales.y.max = newMaxAxis;
       budgetChart.options.scales.y.max = newMaxAxis;
-      maxChartAxisValue = newMaxAxis
+      maxChartAxisValue = newMaxAxis;
       budgetChart.update();
     };
 
@@ -466,21 +495,46 @@
 
     charCanvas.addEventListener('mousemove', (event) => {
       if (isDragging) {
-        dragEnd = { x: event.offsetX, y: event.offsetY };
+        const chartArea = budgetChart.chartArea;
+
+        // Obliczenie marginesu 2%
+        const marginX = (chartArea.right - chartArea.left) * 0.02;
+        const marginY = (chartArea.bottom - chartArea.top) * 0.02;
+
+        // Dopasowanie `dragEnd` do krawędzi wykresu z marginesem
+        dragEnd = {
+          x: Math.min(Math.max(event.offsetX, chartArea.left - marginX), chartArea.right + marginX),
+          y: Math.min(Math.max(event.offsetY, chartArea.top - marginY), chartArea.bottom + marginY),
+        };
+
         drawSelectionBox();
       }
     });
-
-    charCanvas.addEventListener('mouseup', () => {
+    function endDragging() {
       if (isDragging && dragEnd) {
         updateChartZoom();
+        // Ukryj suwak osi i resetuj stany
+        axisSlider.style.display = 'none';
+        axisSliderValue.style.display = 'none';
+        axisSliderLabel.style.display = 'none';
+        isDragging = false;
+        dragStart = null;
+        dragEnd = null;
       }
-      axisSlider.style.display = 'none';
-      axisSliderValue.style.display = 'none';
-      axisSliderLabel.style.display = 'none';
-      isDragging = false;
-      dragStart = null;
-      dragEnd = null;
+
+
+    }
+
+    charCanvas.addEventListener('mouseup', () => {
+      if (isDragging) {
+        endDragging();
+      }
+    });
+
+    charCanvas.addEventListener('mouseleave', () => {
+      if (isDragging) {
+        endDragging();
+      }
     });
 
     // Reset button to reset zoom
@@ -495,7 +549,6 @@
       updateChartLimits();
     });
     // document.body.appendChild(resetButton);
-  </script>
-</body>
-
+        </script>
+    </body>
 </html>

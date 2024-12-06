@@ -27,18 +27,18 @@
 
     // Health Check SetUp
     const ignoreThreshold = 100;
-    const ignoreColor = 'rgba(125, 125, 125, 0.6)';
-    const minOkBudgetPercentage = 0.8;
-    const maxOkBudgetPercentage = 1.05;
-    const okColor = 'rgba(0, 255, 0, 0.3)';
+    const ignoreColor = 'rgba(125, 125, 125, 1)';
+    const minOkBudgetPercentage = 0.9;
+    const maxOkBudgetPercentage = 1.1;
+    const okColor = 'rgba(0, 255, 0, 1)';
     const minCritBudgetValueUnderspend = 300;
-    const minCritBudgetPercentage = 0.75;
+    const minCritBudgetPercentage = 0.80;
     const startCritBuudgetValueOverspend = 500;
-    const maxCritBudgetPercentage = 1.25;
+    const maxCritBudgetPercentage = 1.20;
     const warningAboveVauleMaxStatus = false;
     const warningAboveVauleMax = 1000;
-    const criticalColor = 'rgba(255, 0, 0, 0.2)';
-    const warningColor = 'rgba(246,237,195,1.00)';
+    const criticalColor = 'rgba(255, 0, 0, 1)';
+    const warningColor = 'rgba(246,230,170,1)';
 
     const generateLegend = () => {
       const legendContainer = document.getElementById('chartLegend');
@@ -80,9 +80,9 @@
     // Calculate the step for each x value (log scale)
     const calculateStep = (x) => {
       if (currentScaleType === 'logarithmic') {
-        return Math.max(Math.ceil(0.001 * x), 1); // Smaller steps for logarithmic scale
+        return Math.max(Math.ceil(0.005 * x), 1); // Smaller steps for logarithmic scale
       } else if (currentScaleType === 'linear') {
-        return Math.max(Math.ceil(0.002 * x), 1); // Larger steps for linear scale
+        return Math.max(Math.ceil(0.01 * x), 1); // Larger steps for linear scale
       }
       return 1; // Fallback value
     };
@@ -94,13 +94,13 @@
         const budget = parseFloat((Math.pow(10, Math.random() * (Math.log10(maxBudget) - Math.log10(minBudget)) + Math.log10(minBudget))).toFixed(2));
         const usage = parseFloat((Math.pow(10, Math.random() * (Math.log10(maxUsage) - Math.log10(minUsage)) + Math.log10(minUsage))).toFixed(2));
         const feedback = i % 2 ? 'ok' : 'ignore';
-        data.push({ x: budget, y: usage, project: `Project ${i + 1}`, feedback : feedback });
+        data.push({ x: budget, y: usage, project: `Project ${i + 1}`, feedback: feedback });
       }
 
-      data.push({ x: 25, y: 0, project: `Project test 0 usage}`, feedback : 'err_high' } );
+      data.push({ x: 25, y: 0, project: `Project test 0 usage}`, feedback: 'err_high' });
       return data;
     };
-    const dataReady = generateRandomData(15, 1, 550, 1, 550); //Just as showcase
+    const dataReady = generateRandomData(15, 1, 550000, 1, 550000); //Just as showcase
 
     const data = {
       datasets: [
@@ -134,9 +134,9 @@
 
     const maxBudgetRaw = Math.max(...data.datasets[0].data.map(point => point.x));
     const maxUsageRaw = Math.max(...data.datasets[0].data.map(point => point.y));
-    const maxBudget = roundUpToNextDynamic(maxBudgetRaw);
-    const maxUsage = roundUpToNextDynamic(maxUsageRaw);
-    let maxChartAxisValue = Math.max(maxBudget, maxUsage);
+    const maxBudget = roundUpToNextDynamic(maxBudgetRaw * 1.05);// min 5% extra margin on budget
+    const maxUsage = roundUpToNextDynamic(maxUsageRaw * 1.05);// min 5% extra margin on usage
+    let maxChartAxisValue = Math.max(maxBudget, maxUsage, ignoreThreshold * 2); //minmum ignore Threshold x2
     const sourceMaxChartAxisValue = maxChartAxisValue;
 
 
@@ -149,7 +149,8 @@
 
     const minBudget = calculateMin(data.datasets[0].data, 'x');
     const minUsage = calculateMin(data.datasets[0].data, 'y');
-    const minChartAxisValue = Math.max(Math.min(minBudget, minUsage), 1);
+    const minChartAxisValue = 1;
+    // const minChartAxisValue = Math.max(Math.min(minBudget, minUsage), 1);
 
     const normalizeDataWithOriginal = (data, minValue) => {
       return data.map(point => ({
@@ -271,42 +272,76 @@
 
         // Low Usage Zone (Czerwony dolny obszar)
         const lowStartZone = Math.max(minCritBudgetValueUnderspend, scales.x.min);
+        const lowPoints = [];
 
         for (let x = lowStartZone; x <= xMax; x += calculateStep(x)) {
-          const xMinPixel = getPixel(scales.x, x);
-          const xMaxPixel = getPixel(scales.x, x + calculateStep(x));
+          const xPixel = getPixel(scales.x, x);
           const yMaxValue = Math.min(minCritBudgetPercentage * x, yMax);
 
           // Omiń obszary poza zakresem
           if (yMaxValue < yMin) continue;
 
-          const yMaxPixel = Math.min(getPixel(scales.y, yMaxValue), bottom);
+          const yMaxPixel = getPixel(scales.y, yMaxValue);
 
-          ctx.fillStyle = criticalColor;
-          ctx.fillRect(xMinPixel, yMaxPixel, xMaxPixel - xMinPixel, bottom - yMaxPixel);
+          lowPoints.push({ x: xPixel, y: yMaxPixel });
         }
 
-        // High Usage Zone (Czerwony górny obszar)
+        // Zamknij wielokąt dla Low Usage Zone
+        lowPoints.push({ x: getPixel(scales.x, xMax), y: bottom });
+        lowPoints.push({ x: getPixel(scales.x, lowStartZone), y: bottom });
+
+        ctx.beginPath();
+        ctx.fillStyle = criticalColor;
+        ctx.moveTo(lowPoints[0].x, lowPoints[0].y);
+
+        lowPoints.forEach(point => {
+          ctx.lineTo(point.x, point.y);
+        });
+
+        ctx.closePath();
+        ctx.fill();
+
+        // High usage Zone
         const highStartZone = Math.max(xMin, scales.x.min);
+        const points = [];
 
         for (let x = highStartZone; x <= xMax; x += calculateStep(x)) {
           const xMinPixel = getPixel(scales.x, x);
           const xMaxPixel = getPixel(scales.x, x + calculateStep(x));
-          const yMinValue = Math.max(Math.min(
-            warningAboveVauleMaxStatus
-              ? Math.max(x + warningAboveVauleMax, x * maxOkBudgetPercentage)
-              : Infinity,
-            Math.max(maxCritBudgetPercentage * x, x + startCritBuudgetValueOverspend)
-          ), scales.y.min);
+          const yMinValue = Math.max(
+            Math.min(
+              warningAboveVauleMaxStatus
+                ? Math.max(x + warningAboveVauleMax, x * maxOkBudgetPercentage)
+                : Infinity,
+              Math.max(maxCritBudgetPercentage * x, x + startCritBuudgetValueOverspend)
+            ),
+            scales.y.min
+          );
 
           // Omiń obszary poza zakresem
           if (yMinValue > yMax) continue;
 
           const yMinPixel = getPixel(scales.y, yMinValue);
 
-          ctx.fillStyle = criticalColor;
-          ctx.fillRect(xMinPixel, top, xMaxPixel - xMinPixel, yMinPixel - top);
+          // Dodaj punkty do listy
+          points.push({ x: xMinPixel, y: yMinPixel });
         }
+
+        // Zamknij wielokąt, dodając rogi osi
+        points.push({ x: getPixel(scales.x, xMax), y: top });
+        points.push({ x: getPixel(scales.x, highStartZone), y: top });
+
+        // Rysowanie wielokąta
+        ctx.beginPath();
+        ctx.fillStyle = criticalColor;
+        ctx.moveTo(points[0].x, points[0].y);
+
+        points.forEach(point => {
+          ctx.lineTo(point.x, point.y);
+        });
+
+        ctx.closePath();
+        ctx.fill();
 
         ctx.restore();
       },
@@ -409,11 +444,11 @@
       const newYMin = scales.y.getValueForPixel(yMax);
       const newYMax = scales.y.getValueForPixel(yMin);
 
-      // Ustawienie nowych wartości osi
-      budgetChart.options.scales.x.min = newXMin;
-      budgetChart.options.scales.x.max = newXMax;
-      budgetChart.options.scales.y.min = newYMin;
-      budgetChart.options.scales.y.max = newYMax;
+      // round it up to int to avoid constant zoom
+      budgetChart.options.scales.x.min = Math.floor(newXMin);
+      budgetChart.options.scales.x.max = Math.ceil(Math.max(newXMax, newXMin + 10)); // to avoid too close zoom limit it to min 10
+      budgetChart.options.scales.y.min = Math.floor(newYMin);
+      budgetChart.options.scales.y.max = Math.ceil(Math.max(newYMax, newYMin + 10)); // to avoid too close zoom limit it to min 10 
 
       // Refresh the chart to redraw the zones
       budgetChart.update();

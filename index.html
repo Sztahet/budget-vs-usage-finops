@@ -464,14 +464,26 @@
       const newYMin = scales.y.getValueForPixel(yMax);
       const newYMax = scales.y.getValueForPixel(yMin);
 
-      // round it up to int to avoid constant zoom
-      budgetChart.options.scales.x.min = Math.floor(newXMin);
-      budgetChart.options.scales.x.max = Math.ceil(Math.max(newXMax, newXMin + 10)); // to avoid too close zoom limit it to min 10
-      budgetChart.options.scales.y.min = Math.floor(newYMin);
-      budgetChart.options.scales.y.max = Math.ceil(Math.max(newYMax, newYMin + 10)); // to avoid too close zoom limit it to min 10 
+      //set up minimal size for zoom (in pixels)
+      const minWidth = 20;
+      const minHeight = 20;
 
+      // Setting up new scales only if size is above minimum
+      if ((xMax - xMin) > minWidth || (yMax - yMin) > minHeight) {
+      // round it up to int to avoid constant zoom
+        budgetChart.options.scales.x.min = Math.floor(newXMin);
+        budgetChart.options.scales.x.max = Math.ceil(Math.max(newXMax, newXMin + 10)); // to avoid too close zoom limit it to min 10
+        budgetChart.options.scales.y.min = Math.floor(newYMin);
+        budgetChart.options.scales.y.max = Math.ceil(Math.max(newYMax, newYMin + 10)); // to avoid too close zoom limit it to min 10 
+
+        //hide slider only if new values on zoom
+        axisSlider.style.display = 'none';
+        axisSliderValue.style.display = 'none';
+        axisSliderLabel.style.display = 'none';
+      }
       // Refresh the chart to redraw the zones
       budgetChart.update();
+
     }
 
     charCanvas.addEventListener('mousedown', (event) => {
@@ -504,10 +516,7 @@
     function endDragging() {
       if (isDragging && dragEnd) {
         updateChartZoom();
-        // Ukryj suwak osi i resetuj stany
-        axisSlider.style.display = 'none';
-        axisSliderValue.style.display = 'none';
-        axisSliderLabel.style.display = 'none';
+
         isDragging = false;
         dragStart = null;
         dragEnd = null;

@@ -501,15 +501,31 @@
       if (isDragging && isMouseDown) {
         const chartArea = budgetChart.chartArea;
 
-        // Obliczenie marginesu 2%
+        // extra margin 0.02%
         const marginX = (chartArea.right - chartArea.left) * 0.02;
         const marginY = (chartArea.bottom - chartArea.top) * 0.02;
-
-        // Dopasowanie `dragEnd` do krawędzi wykresu z marginesem
-        dragEnd = {
+        // rectangle selection original values (still need to check if in shape)
+        let tentativeEnd = {
           x: Math.min(Math.max(event.offsetX, chartArea.left - marginX), chartArea.right + marginX),
           y: Math.min(Math.max(event.offsetY, chartArea.top - marginY), chartArea.bottom + marginY),
         };
+
+        // calculate sides of rectangels
+        const deltaX = tentativeEnd.x - dragStart.x;
+        const deltaY = tentativeEnd.y - dragStart.y;
+
+        // find if X or Y is bigger
+        const squareSide = Math.max(Math.abs(deltaX), Math.abs(deltaY));
+
+        // set up final
+        dragEnd = {
+          x: dragStart.x + (deltaX >= 0 ? squareSide : -squareSide),
+          y: dragStart.y + (deltaY >= 0 ? squareSide : -squareSide),
+        };
+
+        // Reshape square to fit in chart -- it is still possible to create recatangle (not square) next to chart border
+        dragEnd.x = Math.min(Math.max(dragEnd.x, chartArea.left - marginX), chartArea.right + marginX);
+        dragEnd.y = Math.min(Math.max(dragEnd.y, chartArea.top - marginY), chartArea.bottom + marginY);
 
         drawSelectionBox();
       }

@@ -294,7 +294,7 @@
         ctx.fill();
 
         // Low Usage Zone (Czerwony dolny obszar)
-        const lowStartZone = Math.max(minCritBudgetValueUnderspend, scales.x.min);
+        const lowStartZone = Math.max(minCritBudgetValueUnderspend, scales.x.min, ignoreThreshold);
         const lowPoints = [];
 
         for (let x = lowStartZone; x <= xMax + calculateStep(x); x += calculateStep(x)) {
@@ -336,7 +336,7 @@
               warningAboveVauleMaxStatus
                 ? Math.max(x + warningAboveVauleMax, x * maxOkBudgetPercentage)
                 : Infinity,
-              Math.max(maxCritBudgetPercentage * x, x + startCritBuudgetValueOverspend)
+              Math.max(maxCritBudgetPercentage * x, x + startCritBuudgetValueOverspend, ignoreThreshold)
             ),
             scales.y.min
           );
@@ -416,7 +416,7 @@
     axisSlider.addEventListener('input', updateChartLimits);
 
     // add canvas zoom in dragging rect:
-
+    let isMouseDown = false;
     let isDragging = false;
     let dragStart = null;
     let dragEnd = null;
@@ -470,7 +470,7 @@
 
       // Setting up new scales only if size is above minimum
       if ((xMax - xMin) > minWidth || (yMax - yMin) > minHeight) {
-      // round it up to int to avoid constant zoom
+        // round it up to int to avoid constant zoom
         budgetChart.options.scales.x.min = Math.floor(newXMin);
         budgetChart.options.scales.x.max = Math.ceil(Math.max(newXMax, newXMin + 10)); // to avoid too close zoom limit it to min 10
         budgetChart.options.scales.y.min = Math.floor(newYMin);
@@ -487,6 +487,7 @@
     }
 
     charCanvas.addEventListener('mousedown', (event) => {
+      isMouseDown = true;
       const chartArea = budgetChart.chartArea;
       if (event.offsetX >= chartArea.left && event.offsetX <= chartArea.right &&
         event.offsetY >= chartArea.top && event.offsetY <= chartArea.bottom) {
@@ -497,7 +498,7 @@
     });
 
     charCanvas.addEventListener('mousemove', (event) => {
-      if (isDragging) {
+      if (isDragging && isMouseDown) {
         const chartArea = budgetChart.chartArea;
 
         // Obliczenie marginesu 2%
@@ -520,6 +521,7 @@
         isDragging = false;
         dragStart = null;
         dragEnd = null;
+        isMouseDown = false;
       }
     }
 
@@ -527,6 +529,7 @@
       if (isDragging) {
         endDragging();
       }
+      isMouseDown = false;
     });
 
     charCanvas.addEventListener('mouseleave', () => {
